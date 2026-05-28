@@ -3,166 +3,200 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>备货模型V1.2</title>
+    <title>备货模型V1.3</title>
     <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.2/dist/echarts.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
         [v-cloak] { display: none; }
-        body { margin: 0; overflow: hidden; background: #f1f5f9; }
-        .app-container { display: flex; height: 100vh; width: 100vw; }
-        .sidebar { width: 280px; background: #ffffff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; z-index: 10;}
-        .main-content { flex: 1; overflow-y: auto; padding: 20px; }
-        .scroll-area { overflow-y: auto; }
-        .scroll-area::-webkit-scrollbar { width: 4px; }
-        .scroll-area::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 2px; }
-        .product-item { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: all 0.2s;}
-        .product-item:hover { background: #f8fafc; }
-        .product-item.active { background: #eff6ff; border-left: 4px solid #3b82f6; }
-        .glass-card { background: white; border: 1px solid #e2e8f0; border-radius: 0.5rem; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+        body { margin: 0; background: #f1f5f9; overflow-x: hidden; }
+        .scroll-area { max-height: 250px; overflow-y: auto; }
+        .scroll-area::-webkit-scrollbar { width: 6px; }
+        .scroll-area::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 3px; }
+        
+        /* 侧边栏样式 */
+        .sidebar { width: 260px; height: 100vh; position: fixed; left: 0; top: 0; background: #fff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; z-index: 50; }
+        .main-content { margin-left: 260px; padding: 20px; min-height: 100vh; }
+        .sku-item { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #f8fafc; transition: background 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .sku-item:hover { background: #f8fafc; }
+        .sku-item.active { background: #eff6ff; border-left: 4px solid #4f46e5; }
     </style>
 </head>
-<body>
-    <div id="app" v-cloak class="app-container">
+<body class="text-gray-800 font-sans">
+    <div id="app" v-cloak>
         
         <div class="sidebar shadow-sm">
-            <div class="p-5 bg-blue-600 text-white shadow-md z-10">
-                <h2 class="font-bold text-lg flex items-center">📦 SKU 控制中心</h2>
-                <div class="text-xs text-blue-200 mt-1">全局推演起始日:</div>
-                <input type="date" v-model="globalStartDate" class="w-full mt-1 bg-blue-700 border-none text-white text-sm p-1 rounded outline-none font-bold">
+            <div class="p-4 bg-indigo-600 text-white shadow-md">
+                <h2 class="font-bold text-lg flex items-center">📦 SKU 矩阵控制台</h2>
+                <div class="text-xs text-indigo-200 mt-2">全局推演起始日:</div>
+                <input type="date" v-model="globalStartDate" class="w-full mt-1 bg-indigo-700 border-none text-white text-sm p-1 rounded outline-none font-bold">
             </div>
             
-            <div class="flex-1 scroll-area">
-                <div v-for="(prod, index) in products" :key="index" 
-                     class="product-item flex justify-between items-center"
+            <div class="flex-1 overflow-y-auto">
+                <div v-for="(prod, index) in products" :key="prod.id" 
+                     class="sku-item group"
                      :class="{ active: currentProductIndex === index }"
                      @click="currentProductIndex = index">
-                    <div>
-                        <div class="text-sm font-bold text-gray-800">{{ prod.sku }}</div>
-                        <div class="text-xs text-gray-500 w-40 truncate">{{ prod.name }}</div>
+                    
+                    <div class="flex-1 w-0 mr-2" v-if="editingIndex !== index">
+                        <div class="text-sm font-bold text-gray-800 truncate">{{ prod.sku }}</div>
+                        <div class="text-xs text-gray-500 truncate">{{ prod.name }}</div>
+                    </div>
+                    
+                    <div class="flex-1 w-0 mr-2 flex flex-col space-y-1" v-if="editingIndex === index" @click.stop>
+                        <input type="text" v-model="prod.sku" class="text-sm font-bold border rounded px-1 w-full" placeholder="SKU编码">
+                        <input type="text" v-model="prod.name" class="text-xs border rounded px-1 w-full" placeholder="产品名称" @keyup.enter="editingIndex = null">
+                    </div>
+
+                    <div class="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button v-if="editingIndex !== index" @click.stop="editingIndex = index" class="text-blue-500 hover:text-blue-700 text-xs px-1">✎</button>
+                        <button v-if="editingIndex === index" @click.stop="editingIndex = null" class="text-green-500 hover:text-green-700 text-xs px-1">✔</button>
+                        <button @click.stop="removeProduct(index)" class="text-red-400 hover:text-red-600 text-xs px-1" title="删除">✖</button>
                     </div>
                 </div>
+            </div>
+            
+            <div class="p-4 border-t">
+                <button @click="addProduct" class="w-full bg-indigo-50 text-indigo-600 border border-indigo-200 text-sm py-2 rounded font-bold hover:bg-indigo-100 transition">
+                    + 新增产品 SKU
+                </button>
             </div>
         </div>
 
         <div class="main-content">
-            <div class="max-w-[1400px] mx-auto space-y-4">
+            <div class="max-w-[1400px] mx-auto space-y-4" v-if="products.length > 0">
                 
-                <div class="glass-card p-4 border-l-4 border-blue-500">
-                    <h1 class="text-xl font-bold text-gray-800">当前视角: {{ currentProduct.name }} ({{ currentProduct.sku }})</h1>
-                    <p class="text-xs text-gray-500 mt-1">独立配置参数、大促节点与在途货品，算法引擎实时重算。</p>
+                <div class="bg-white p-5 rounded-xl shadow-sm border-l-4 border-indigo-600 flex justify-between items-center">
+                    <div>
+                        <h1 class="text-xl font-bold text-indigo-900">当前分析：{{ currentProduct.name }} ({{ currentProduct.sku }})</h1>
+                        <p class="text-sm text-gray-500 mt-1">每个 SKU 拥有独立参数、大促节点、在途货物记录，互相隔离。</p>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 xl:grid-cols-12 gap-4">
                     <div class="xl:col-span-4 flex flex-col space-y-4">
                         
-                        <div class="glass-card p-4">
-                            <h2 class="text-sm font-bold border-b pb-2 mb-3 text-blue-800">⚙️ 核心运算参数</h2>
-                            <div class="grid grid-cols-2 gap-2 text-xs mb-3">
-                                <div class="bg-gray-50 p-1.5 border rounded">
-                                    <label class="block text-gray-500 mb-0.5">期初库存</label>
-                                    <input type="number" v-model.number="currentProduct.initialStock" class="w-full font-bold text-sm bg-transparent outline-none border-b border-gray-300">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                            <h2 class="text-sm font-bold border-b pb-2 mb-3 text-indigo-800">1. 参数、MOQ与预售机制</h2>
+                            <div class="grid grid-cols-2 gap-3 text-xs mb-3">
+                                <div class="bg-gray-50 p-2 border rounded">
+                                    <label class="block text-gray-500 mb-1">期初实盘库存</label>
+                                    <input type="number" v-model.number="currentProduct.initialStock" class="w-full font-bold text-base outline-none bg-transparent">
                                 </div>
-                                <div class="bg-gray-50 p-1.5 border rounded">
-                                    <label class="block text-gray-500 mb-0.5">基础日销</label>
-                                    <input type="number" v-model.number="currentProduct.baseSales" class="w-full font-bold text-sm bg-transparent outline-none border-b border-gray-300">
+                                <div class="bg-red-50 p-2 border border-red-100 rounded">
+                                    <label class="block text-red-500 mb-1 font-bold">海运备货周期 (天)</label>
+                                    <input type="number" v-model.number="currentProduct.leadTime" class="w-full font-bold text-base text-red-700 outline-none bg-transparent">
                                 </div>
-                                <div class="bg-red-50 p-1.5 border border-red-100 rounded">
-                                    <label class="block text-red-600 mb-0.5 font-bold">备货周期(天)</label>
-                                    <input type="number" v-model.number="currentProduct.leadTime" class="w-full font-bold text-sm bg-transparent outline-none border-b border-red-300 text-red-700">
+                                <div class="bg-blue-50 p-2 border border-blue-100 rounded">
+                                    <label class="block text-blue-500 mb-1">本月日均基础销量</label>
+                                    <input type="number" v-model.number="currentProduct.baseSales" class="w-full font-bold text-base text-blue-700 outline-none bg-transparent">
                                 </div>
-                                <div class="bg-orange-50 p-1.5 border border-orange-100 rounded">
-                                    <label class="block text-orange-600 mb-0.5 font-bold">查缺冷却(天)</label>
-                                    <input type="number" v-model.number="currentProduct.reviewCycle" class="w-full font-bold text-sm bg-transparent outline-none border-b border-orange-300 text-orange-700">
+                                <div class="bg-green-50 p-2 border border-green-100 rounded">
+                                    <label class="block text-green-600 mb-1 font-bold">月度自然增长率(%)</label>
+                                    <input type="number" v-model.number="currentProduct.monthlyGrowthRate" step="1" class="w-full font-bold text-base text-green-700 outline-none bg-transparent">
                                 </div>
-                                <div class="bg-green-50 p-1.5 border border-green-100 rounded">
-                                    <label class="block text-green-600 mb-0.5">安全底线(天)</label>
-                                    <input type="number" v-model.number="currentProduct.safetyDays" class="w-full font-bold text-sm bg-transparent outline-none border-b border-green-300 text-green-700">
+                                <div class="bg-orange-50 p-2 border border-orange-100 rounded">
+                                    <label class="block text-orange-600 mb-1 font-bold">防并发冷却期(天)</label>
+                                    <input type="number" v-model.number="currentProduct.reviewCycle" class="w-full font-bold text-base text-orange-700 outline-none bg-transparent">
                                 </div>
-                                <div class="bg-blue-50 p-1.5 border border-blue-100 rounded">
-                                    <label class="block text-blue-600 mb-0.5">MOQ起订量</label>
-                                    <input type="number" v-model.number="currentProduct.moq" class="w-full font-bold text-sm bg-transparent outline-none border-b border-blue-300 text-blue-700">
+                                <div class="bg-gray-50 p-2 border rounded">
+                                    <label class="block text-gray-500 mb-1">底线安全库存 (天)</label>
+                                    <input type="number" v-model.number="currentProduct.safetyDays" class="w-full font-bold text-base outline-none bg-transparent">
                                 </div>
                             </div>
-                            <div class="border-t pt-2 mt-2 text-xs">
-                                <label class="flex items-center font-bold text-purple-700 mb-1">
-                                    <input type="checkbox" v-model="currentProduct.enablePresale" class="mr-1"> 允许预售 (不断供)
+                            
+                            <div class="bg-indigo-50 border border-indigo-100 rounded p-2 mb-3 flex items-center justify-between text-xs">
+                                <div class="font-bold text-indigo-800">📦 单次最小起订量 (MOQ)</div>
+                                <div class="flex items-center">
+                                    <input type="number" v-model.number="currentProduct.moq" class="w-16 text-right font-bold text-base text-indigo-700 bg-transparent border-b border-indigo-300 outline-none">
+                                    <span class="ml-1 text-indigo-600">件</span>
+                                </div>
+                            </div>
+                            
+                            <div class="border-t pt-2 text-xs">
+                                <label class="flex items-center text-purple-800 font-bold mb-2">
+                                    <input type="checkbox" v-model="currentProduct.enablePresale" class="mr-2 rounded text-purple-600"> 开启断货预售判定
                                 </label>
-                                <div v-if="currentProduct.enablePresale" class="flex justify-between bg-purple-50 p-1.5 rounded items-center">
-                                    <span>预售容忍天数(惩罚阈值):</span>
-                                    <input type="number" v-model.number="currentProduct.maxPresaleDays" class="w-10 text-right bg-transparent border-b border-purple-300 font-bold outline-none">
+                                <div v-if="currentProduct.enablePresale" class="bg-purple-50 p-2 rounded border border-purple-100 flex justify-between items-center">
+                                    <span class="text-purple-700">预售超几天触发惩罚降权:</span>
+                                    <input type="number" v-model.number="currentProduct.maxPresaleDays" class="w-12 text-right border-b border-purple-300 bg-transparent font-bold outline-none text-base text-purple-800">
                                 </div>
                             </div>
                         </div>
 
-                        <div class="glass-card p-4">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                             <div class="flex justify-between items-center border-b pb-1 mb-2">
-                                <h2 class="text-sm font-bold text-blue-800">🚢 历史在途 (待入库)</h2>
-                                <button @click="addInTransit" class="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded border">+ 添加</button>
+                                <h2 class="text-sm font-bold text-indigo-800">2. 历史在途货物 (海上漂着的)</h2>
+                                <button @click="addInTransit" class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100">+ 添加批次</button>
                             </div>
-                            <div class="space-y-1 max-h-24 scroll-area">
-                                <div v-if="currentProduct.inTransit.length === 0" class="text-[10px] text-center text-gray-400">无在途数据</div>
-                                <div v-for="(batch, idx) in currentProduct.inTransit" :key="idx" class="flex items-center space-x-1 text-xs bg-gray-50 p-1 rounded relative pr-4">
-                                    <input type="date" v-model="batch.arrivalDate" class="border rounded px-1 w-[90px] text-[10px]">
-                                    <span class="text-gray-500">数量</span>
-                                    <input type="number" v-model.number="batch.qty" class="border rounded px-1 w-14 font-bold text-blue-700">
-                                    <button @click="removeInTransit(idx)" class="absolute right-1 text-red-400">&times;</button>
+                            <div v-if="currentProduct.inTransitBatches.length === 0" class="text-center text-[10px] text-gray-400 py-1">当前没有在途货物</div>
+                            <div class="space-y-1 scroll-area">
+                                <div v-for="(batch, idx) in currentProduct.inTransitBatches" :key="batch.id" class="flex items-center space-x-2 text-xs bg-indigo-50 p-1.5 rounded relative pr-5 border border-indigo-100">
+                                    <span class="text-indigo-500 font-bold">预计到港</span>
+                                    <input type="date" v-model="batch.arrivalDate" class="border rounded px-1 text-indigo-800 font-bold outline-none w-24 bg-white">
+                                    <span class="text-indigo-500 font-bold ml-1">数量</span>
+                                    <input type="number" v-model.number="batch.qty" class="border rounded px-1 w-16 text-right font-bold text-indigo-800 outline-none bg-white">
+                                    <button @click="removeInTransit(idx)" class="absolute right-1.5 text-indigo-300 hover:text-red-500 font-bold">&times;</button>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="glass-card p-4">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                             <div class="flex justify-between items-center border-b pb-1 mb-2">
-                                <h2 class="text-sm font-bold text-blue-800">🔥 大促日历 (独立爆发)</h2>
-                                <button @click="addCampaign" class="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded border">+ 添加</button>
+                                <h2 class="text-sm font-bold text-indigo-800">3. 营销大促日历</h2>
+                                <button @click="addCampaign" class="text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded border border-red-100">+ 添加</button>
                             </div>
-                            <div class="space-y-1 max-h-24 scroll-area">
-                                <div v-if="currentProduct.campaigns.length === 0" class="text-[10px] text-center text-gray-400">日常平销期</div>
-                                <div v-for="(camp, idx) in currentProduct.campaigns" :key="idx" class="flex flex-col text-[10px] bg-red-50 p-1.5 rounded relative pr-4">
-                                    <div class="flex items-center space-x-1 mb-1">
-                                        <input type="date" v-model="camp.startDate" class="border rounded px-1 w-20">
-                                        <span>至</span>
-                                        <input type="date" v-model="camp.endDate" class="border rounded px-1 w-20">
-                                    </div>
-                                    <div class="flex justify-between items-center">
-                                        <span class="text-red-500 font-bold">爆发倍数:</span>
-                                        <input type="number" v-model.number="camp.multiplier" step="0.5" class="border rounded px-1 w-12 text-red-700 font-bold text-right">
-                                    </div>
-                                    <button @click="removeCampaign(idx)" class="absolute top-1 right-1 text-red-400">&times;</button>
+                            <div class="space-y-1 scroll-area">
+                                <div v-if="currentProduct.campaigns.length === 0" class="text-center text-[10px] text-gray-400 py-1">暂无大促</div>
+                                <div v-for="(camp, idx) in currentProduct.campaigns" :key="'c'+idx" class="flex items-center space-x-1 text-xs bg-red-50 p-1.5 rounded relative pr-4">
+                                    <input type="date" v-model="camp.startDate" class="border rounded px-1 w-20">
+                                    <span class="text-red-300">-</span>
+                                    <input type="date" v-model="camp.endDate" class="border rounded px-1 w-20">
+                                    <span class="text-red-500 ml-1">爆发</span>
+                                    <input type="number" v-model.number="camp.multiplier" step="0.5" class="border rounded w-10 text-center font-bold text-red-600">
+                                    <button @click="removeCampaign(idx)" class="absolute right-1 text-red-400 font-bold">&times;</button>
                                 </div>
                             </div>
                         </div>
 
                     </div>
 
-                    <div class="xl:col-span-8 flex flex-col space-y-4 h-full">
-                        <div class="glass-card p-4 flex-1 min-h-[500px]">
-                            <div id="mainChart" class="w-full h-full"></div>
+                    <div class="xl:col-span-8 flex flex-col space-y-4">
+                        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 min-h-[500px]">
+                            <div id="mainChart" class="w-full h-full min-h-[500px]"></div>
                         </div>
 
-                        <div class="glass-card p-3 h-48 flex flex-col">
-                            <h2 class="text-xs font-bold border-b pb-1 mb-1 text-gray-700">智能推演补货指令</h2>
-                            <div class="scroll-area flex-1 space-y-1">
-                                <div v-if="simulationData.orderLog.length===0" class="text-xs text-gray-400 text-center mt-4">无需补货</div>
-                                <div v-for="(log, idx) in simulationData.orderLog" :key="idx" 
-                                     class="flex justify-between items-center p-1.5 rounded border text-[10px]" 
-                                     :class="log.type==='Emergency' ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'">
-                                    <div class="flex space-x-2">
-                                        <span class="font-bold w-20">{{ log.date }}</span>
-                                        <span class="px-1 rounded text-white" :class="log.type==='Emergency' ? 'bg-red-500' : 'bg-blue-500'">
-                                            {{ log.type === 'Emergency' ? '🚨 跌破安全线熔断' : '📅 查缺补齐' }}
-                                        </span>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex-1 flex flex-col max-h-[300px]">
+                            <h2 class="text-sm font-bold border-b pb-1 mb-2 text-indigo-800">4. 智能推演发单日志 (自动建议)</h2>
+                            <div class="scroll-area flex-1 space-y-2">
+                                <div v-if="simulationData.orderLog.length === 0" class="text-center text-xs text-gray-400 py-4">无新发货记录</div>
+                                <div v-for="(log, idx) in simulationData.orderLog" :key="idx" class="flex flex-col p-2 rounded border" :class="log.type==='Emergency' ? 'bg-red-50 border-red-200' : 'bg-blue-50 border-blue-200'">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <div>
+                                            <span class="font-bold text-xs text-gray-700">{{ log.date }}</span>
+                                            <span class="text-[9px] font-bold px-1 rounded ml-1 text-white" :class="log.type==='Emergency' ? 'bg-red-500' : 'bg-blue-500'">
+                                                {{ log.type === 'Emergency' ? '🚨 跌破警戒线紧急补单' : '📅 冷却期满常规补齐' }}
+                                            </span>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="font-black text-base leading-none" :class="log.type==='Emergency' ? 'text-red-600' : 'text-blue-600'">{{ log.qty.toLocaleString() }}</div>
+                                            <div class="text-[9px] text-gray-500 mt-0.5">预计 {{ log.arrival }} 到港</div>
+                                        </div>
                                     </div>
-                                    <div class="flex items-center space-x-4">
-                                        <span v-if="log.moqApplied" class="text-indigo-600">⬆️ MOQ触发</span>
-                                        <span class="text-gray-500">预计 {{ log.arrival }} 到</span>
-                                        <span class="font-black text-sm w-16 text-right" :class="log.type==='Emergency' ? 'text-red-600' : 'text-blue-600'">{{ log.qty.toLocaleString() }}</span>
+                                    <div class="text-[9px] flex flex-wrap gap-1 mt-1">
+                                        <span v-if="log.moqApplied" class="bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded border border-indigo-200">
+                                            ⬆️ 已拉高至 MOQ 起订量
+                                        </span>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+            
+            <div v-else class="flex h-full items-center justify-center text-gray-400">
+                暂无产品，请在左侧点击“新增产品 SKU”
             </div>
         </div>
     </div>
@@ -182,46 +216,61 @@
         function dayDiff(d1Str, d2Str) {
             return Math.ceil((new Date(d2Str) - new Date(d1Str)) / 86400000);
         }
+        function monthDiff(d1, d2) {
+            let date1 = new Date(d1); let date2 = new Date(d2);
+            let months = (date2.getFullYear() - date1.getFullYear()) * 12;
+            months -= date1.getMonth(); months += date2.getMonth();
+            return months <= 0 ? 0 : months;
+        }
+
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+
+        // 默认模板产品
+        const createDefaultProduct = (startDate, index) => ({
+            id: generateId(),
+            sku: `NEW-SKU-00${index}`, 
+            name: '新建测试产品',
+            initialStock: 1000, baseSales: 50, leadTime: 75, reviewCycle: 30, safetyDays: 20, monthlyGrowthRate: 10, moq: 3000,
+            enablePresale: true, maxPresaleDays: 15, // 惩罚阈值
+            inTransitBatches: [],
+            campaigns: []
+        });
 
         new Vue({
             el: '#app',
             data() {
                 let todayStr = formatYMD(new Date());
+                let demoProduct1 = createDefaultProduct(todayStr, 1);
+                demoProduct1.sku = 'SKU-A-001'; demoProduct1.name = '爆款蓝牙耳机';
+                demoProduct1.inTransitBatches = [{ id: generateId(), arrivalDate: addDays(todayStr, 25), qty: 1500 }];
+                demoProduct1.campaigns = [{ startDate: addDays(todayStr, 80), endDate: addDays(todayStr, 82), multiplier: 8.0 }];
+
+                let demoProduct2 = createDefaultProduct(todayStr, 2);
+                demoProduct2.sku = 'SKU-B-002'; demoProduct2.name = '长尾手机壳';
+                demoProduct2.initialStock = 5000; demoProduct2.enablePresale = false;
+
                 return {
                     globalStartDate: todayStr,
                     currentProductIndex: 0,
-                    products: [
-                        {
-                            sku: 'SKU-A-001', name: '爆款蓝牙耳机 (带大促测试)',
-                            initialStock: 1000, baseSales: 50, leadTime: 75, reviewCycle: 30, safetyDays: 20, moq: 3000,
-                            enablePresale: true, maxPresaleDays: 15, monthlyGrowthRate: 0,
-                            inTransit: [{ arrivalDate: addDays(todayStr, 25), qty: 1500 }],
-                            campaigns: [{ startDate: addDays(todayStr, 80), endDate: addDays(todayStr, 82), multiplier: 8.0 }]
-                        },
-                        {
-                            sku: 'SKU-B-002', name: '长尾手机壳 (纯平销测试)',
-                            initialStock: 5000, baseSales: 30, leadTime: 60, reviewCycle: 45, safetyDays: 30, moq: 5000,
-                            enablePresale: false, maxPresaleDays: 0, monthlyGrowthRate: 5,
-                            inTransit: [], campaigns: []
-                        }
-                    ],
+                    editingIndex: null,
+                    products: [demoProduct1, demoProduct2],
                     chartInstance: null
                 }
             },
             computed: {
                 currentProduct() {
-                    return this.products[this.currentProductIndex];
+                    return this.products[this.currentProductIndex] || {};
                 },
                 simulationData() {
+                    if(this.products.length === 0) return { orderLog: [] };
+                    
                     let p = this.currentProduct;
                     let localStock = p.initialStock || 0;
                     let pipeline = []; 
                     
-                    if (p.inTransit) {
-                        for (let batch of p.inTransit) {
-                            if (batch.arrivalDate && batch.qty > 0 && batch.arrivalDate >= this.globalStartDate) {
-                                pipeline.push({ arrival: batch.arrivalDate, qty: Number(batch.qty) });
-                            }
+                    for (let batch of p.inTransitBatches) {
+                        if (batch.arrivalDate && batch.qty > 0 && batch.arrivalDate >= this.globalStartDate) {
+                            pipeline.push({ arrival: batch.arrivalDate, qty: Number(batch.qty) });
                         }
                     }
                     
@@ -231,70 +280,77 @@
 
                     let theoreticalDailyConsumption = {};
                     let currentDayObj = new Date(this.globalStartDate);
+                    let startMonthDate = new Date(this.globalStartDate);
                     
-                    // 1. 理论销量日历预演
                     for (let i = 0; i < 300; i++) {
                         let ymd = formatYMD(currentDayObj);
-                        let consumption = p.baseSales * Math.pow(1 + (p.monthlyGrowthRate || 0)/100, i/30);
-                        if (p.campaigns) {
-                            for (let camp of p.campaigns) {
-                                if (camp.startDate && camp.endDate && ymd >= camp.startDate && ymd <= camp.endDate) {
-                                    consumption = Math.max(consumption, (p.baseSales * Math.pow(1 + (p.monthlyGrowthRate||0)/100, i/30)) * (Number(camp.multiplier) || 1));
-                                }
+                        let monthsPassed = monthDiff(startMonthDate, currentDayObj);
+                        let growthMultiplier = Math.pow(1 + (p.monthlyGrowthRate || 0) / 100, monthsPassed);
+                        let currentBaseSales = (p.baseSales || 0) * growthMultiplier;
+                        
+                        let consumption = currentBaseSales;
+                        for (let camp of p.campaigns) {
+                            if (camp.startDate && camp.endDate && ymd >= camp.startDate && ymd <= camp.endDate) {
+                                consumption = Math.max(consumption, currentBaseSales * (Number(camp.multiplier) || 1));
                             }
                         }
-                        theoreticalDailyConsumption[ymd] = { total: consumption };
+                        theoreticalDailyConsumption[ymd] = { total: consumption, base: currentBaseSales };
                         currentDayObj.setDate(currentDayObj.getDate() + 1);
                     }
 
                     const calcTheoreticalDemand = (startStr, days) => {
                         let demand = 0; let d = new Date(startStr);
                         for(let i=0; i<days; i++) {
-                            demand += (theoreticalDailyConsumption[formatYMD(d)] ? theoreticalDailyConsumption[formatYMD(d)].total : 0);
+                            let ymd = formatYMD(d);
+                            demand += (theoreticalDailyConsumption[ymd] ? theoreticalDailyConsumption[ymd].total : 0);
                             d.setDate(d.getDate() + 1);
                         }
                         return demand;
                     };
 
                     currentDayObj = new Date(this.globalStartDate);
-                    let presaleDuration = 0; // 预售持续时间
+                    let presaleDuration = 0; // 记录处于预售或断货的天数
                     let daysSinceLastOrder = p.reviewCycle; 
 
-                    // 2. 核心逐日演进
                     for (let dayIndex = 0; dayIndex < 200; dayIndex++) {
                         let todayStr = formatYMD(currentDayObj);
                         xAxisDates.push(todayStr);
-                        let theorySalesToday = theoreticalDailyConsumption[todayStr].total;
+                        let theorySalesToday = theoreticalDailyConsumption[todayStr] ? theoreticalDailyConsumption[todayStr].total : 0;
 
-                        // [入库结算]
+                        // === 1. 结算今日到货 ===
                         let arrivingToday = pipeline.filter(pl => pl.arrival === todayStr).reduce((sum, pl) => sum + pl.qty, 0);
                         if (arrivingToday > 0) {
                             localStock += arrivingToday;
-                            markPoints.push({ coord: [todayStr, localStock], symbol: 'rect', symbolSize: [15, 8], symbolOffset: [0, -10], itemStyle: { color: '#4ade80' }});
-                            presaleDuration = 0; // 货到，解除预售惩罚威胁
+                            markPoints.push({ coord: [todayStr, localStock], symbol: 'rect', symbolSize: [20, 10], symbolOffset: [0, -10], itemStyle: { color: '#4ade80' }, tooltip: {formatter: `✅ 到港入库: ${arrivingToday.toLocaleString()}件`} });
+                            
+                            // 逻辑修正：只要货到了，不管之前预售拖了多久，立刻解除惩罚！
+                            presaleDuration = 0; 
                         }
 
-                        // [销售判定: 惩罚前置逻辑]
+                        // === 2. 判定实际销量与【前置惩罚】 ===
                         let actualSalesToday = 0;
                         let state = 'normal';
 
                         if (localStock > 0) {
                             actualSalesToday = theorySalesToday;
                             state = 'normal';
-                            presaleDuration = 0;
+                            presaleDuration = 0; // 库存转正，重置预售天数
                         } else {
+                            // 库存 <= 0，进入缺货状态分支
                             if (p.enablePresale) {
                                 let nextArrivalArr = pipeline.filter(pl => pl.arrival > todayStr).sort((a,b) => a.arrival > b.arrival ? 1 : -1);
-                                if (nextArrivalArr.length > 0 && dayDiff(todayStr, nextArrivalArr[0].arrival) <= p.maxPresaleDays) {
+                                if (nextArrivalArr.length > 0) {
                                     state = 'presale';
-                                    presaleDuration++;
-                                    // 核心修正：如果预售拖得太久(超过设置的阈值)，直接在预售期触发降权流失
+                                    presaleDuration++; // 预售天数累加
+                                    
+                                    // 核心修正：惩罚前置！如果预售天数超过容忍阈值，开始流失（砍半）
                                     if (presaleDuration > p.maxPresaleDays) {
-                                        actualSalesToday = theorySalesToday * 0.5; 
+                                        actualSalesToday = theorySalesToday * 0.5; // 惩罚：销量腰斩
                                     } else {
-                                        actualSalesToday = theorySalesToday; 
+                                        actualSalesToday = theorySalesToday; // 还在容忍期内，全量销售
                                     }
                                 } else {
+                                    // 连在途都没有了，彻底死档，停售
                                     state = 'stopped';
                                 }
                             } else {
@@ -303,23 +359,32 @@
 
                             if (state === 'stopped') {
                                 actualSalesToday = 0; 
-                                localStock = 0; // 停售无账
+                                localStock = 0; 
                                 presaleDuration = 0;
                             }
                         }
 
-                        if (state !== 'stopped') localStock -= actualSalesToday; 
+                        // 扣除销量
+                        if (state !== 'stopped') {
+                            localStock -= actualSalesToday; 
+                        }
                         
                         localStockSeries.push(localStock);
                         actualSalesSeries.push(actualSalesToday);
 
-                        if (state === 'presale') markAreas.push([{ xAxis: todayStr, itemStyle: { color: presaleDuration>p.maxPresaleDays ? 'rgba(239, 68, 68, 0.2)' : 'rgba(253, 186, 116, 0.3)' } }, { xAxis: addDays(todayStr, 1) }]);
+                        // 渲染背景色：容忍期内淡橙色，超出容忍期被惩罚了变为警示红色
+                        if (state === 'presale') {
+                            let color = presaleDuration > p.maxPresaleDays ? 'rgba(239, 68, 68, 0.2)' : 'rgba(253, 186, 116, 0.3)';
+                            markAreas.push([{ xAxis: todayStr, itemStyle: { color: color } }, { xAxis: addDays(todayStr, 1) }]);
+                        }
                         else if (state === 'stopped') markAreas.push([{ xAxis: todayStr, itemStyle: { color: 'rgba(239, 68, 68, 0.4)' } }, { xAxis: addDays(todayStr, 1) }]);
 
-                        // [算量引擎]
+                        // === 3. 智能算量引擎 ===
                         let leadTimeDemand = calcTheoreticalDemand(todayStr, p.leadTime);
                         let cycleDemand = calcTheoreticalDemand(addDays(todayStr, p.leadTime), p.reviewCycle);
-                        let targetSafetyStock = p.baseSales * Math.pow(1 + p.monthlyGrowthRate/100, (dayIndex+p.leadTime)/30) * p.safetyDays;
+                        
+                        let futureBaseSales = theoreticalDailyConsumption[addDays(todayStr, p.leadTime)] ? theoreticalDailyConsumption[addDays(todayStr, p.leadTime)].base : p.baseSales;
+                        let targetSafetyStock = futureBaseSales * p.safetyDays;
 
                         let reorderPoint = leadTimeDemand + targetSafetyStock;
                         let maxTargetLevel = leadTimeDemand + cycleDemand + targetSafetyStock;
@@ -336,7 +401,8 @@
                         if (projectedAvailable <= reorderPoint) {
                             orderQty = maxTargetLevel - projectedAvailable;
                             triggerType = 'Emergency';
-                        } else if (daysSinceLastOrder >= p.reviewCycle) {
+                        } 
+                        else if (daysSinceLastOrder >= p.reviewCycle) {
                             if (projectedAvailable < maxTargetLevel) {
                                 orderQty = maxTargetLevel - projectedAvailable;
                                 triggerType = 'Scheduled';
@@ -344,61 +410,171 @@
                         }
 
                         if (orderQty > 0) {
-                            orderQty = Math.max(p.moq, Math.ceil(orderQty));
+                            orderQty = Math.ceil(orderQty);
+                            let moqApplied = false;
+                            
+                            if (orderQty < p.moq) {
+                                orderQty = p.moq;
+                                moqApplied = true;
+                            }
+
                             let arrivalDate = addDays(todayStr, p.leadTime);
                             pipeline.push({ arrival: arrivalDate, qty: orderQty });
                             
-                            orderLog.push({ date: todayStr, type: triggerType, qty: orderQty, arrival: arrivalDate, moqApplied: orderQty===p.moq });
+                            orderLog.push({ 
+                                date: todayStr, type: triggerType, qty: orderQty, arrival: arrivalDate, moqApplied: moqApplied
+                            });
+                            
                             markPoints.push({
                                 coord: [todayStr, localStock],
-                                symbol: 'pin', symbolSize: triggerType === 'Emergency' ? 40 : 25, 
-                                itemStyle: { color: triggerType === 'Emergency' ? '#dc2626' : '#3b82f6' }
+                                symbol: 'pin', symbolSize: triggerType === 'Emergency' ? 50 : 35, 
+                                itemStyle: { color: triggerType === 'Emergency' ? '#dc2626' : '#3b82f6' },
+                                label: { formatter: '下单', fontSize: 9 }
                             });
+                            
                             daysSinceLastOrder = 0;
                         } else {
                             daysSinceLastOrder++;
                         }
+
                         currentDayObj.setDate(currentDayObj.getDate() + 1);
                     }
                     
-                    return { xAxisDates, localStockSeries, actualSalesSeries, dynamicSafetySeries, dynamicMaxCapSeries, markPoints, markAreas, orderLog: orderLog.reverse() };
+                    return { xAxisDates, localStockSeries, actualSalesSeries, dynamicSafetySeries, dynamicMaxCapSeries, markPoints, markAreas, orderLog };
+                }
+            },
+            mounted() {
+                if(this.products.length > 0) {
+                    this.initChart();
+                    this.updateChart();
+                }
+            },
+            watch: {
+                currentProduct: { deep: true, handler() { this.updateChart(); } },
+                globalStartDate() { this.updateChart(); },
+                currentProductIndex() { 
+                    this.editingIndex = null;
+                    this.$nextTick(() => { this.updateChart(); }); 
                 }
             },
             methods: {
-                addInTransit() { this.currentProduct.inTransit.push({ arrivalDate: addDays(this.globalStartDate, 30), qty: this.currentProduct.moq }); },
-                removeInTransit(idx) { this.currentProduct.inTransit.splice(idx, 1); },
-                addCampaign() { this.currentProduct.campaigns.push({ startDate: addDays(this.globalStartDate, 60), endDate: addDays(this.globalStartDate, 62), multiplier: 3 }); },
-                removeCampaign(idx) { this.currentProduct.campaigns.splice(idx, 1); },
-                
+                addProduct() {
+                    let newProd = createDefaultProduct(this.globalStartDate, this.products.length + 1);
+                    this.products.push(newProd);
+                    this.currentProductIndex = this.products.length - 1;
+                },
+                removeProduct(idx) {
+                    this.products.splice(idx, 1);
+                    if (this.currentProductIndex >= this.products.length) {
+                        this.currentProductIndex = Math.max(0, this.products.length - 1);
+                    }
+                },
+                addInTransit() {
+                    let d = addDays(this.globalStartDate, 30);
+                    this.currentProduct.inTransitBatches.push({ id: generateId(), arrivalDate: d, qty: this.currentProduct.moq });
+                },
+                removeInTransit(id) {
+                    this.currentProduct.inTransitBatches.splice(id, 1);
+                },
+                addCampaign() {
+                    let d = addDays(this.globalStartDate, 60);
+                    this.currentProduct.campaigns.push({ startDate: d, endDate: addDays(d, 2), multiplier: 3 });
+                },
+                removeCampaign(idx) { 
+                    this.currentProduct.campaigns.splice(idx, 1); 
+                },
                 initChart() {
-                    this.chartInstance = echarts.init(document.getElementById('mainChart'));
-                    window.addEventListener('resize', () => { this.chartInstance.resize(); });
+                    let dom = document.getElementById('mainChart');
+                    if(dom) {
+                        this.chartInstance = echarts.init(dom);
+                        window.addEventListener('resize', () => { this.chartInstance.resize(); });
+                    }
                 },
                 updateChart() {
-                    let d = this.simulationData;
+                    if(this.products.length === 0 || !this.chartInstance) return;
+                    let simData = this.simulationData;
+                    
                     let option = {
-                        tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-                        legend: { data: ['前台纯销量', '实盘库存/预售欠款'], bottom: 0 },
-                        grid: { left: '3%', right: '4%', bottom: '8%', top: '5%', containLabel: true },
-                        dataZoom: [{ type: 'inside', start: 0, end: 100 }, { type: 'slider', start: 0, end: 100, height: 20, bottom: 25 }],
-                        xAxis: { type: 'category', data: d.xAxisDates },
-                        yAxis: [{ type: 'value', name: '库存件数' }, { type: 'value', name: '日销量', position: 'right' }],
+                        tooltip: { 
+                            trigger: 'axis', 
+                            axisPointer: { type: 'cross', lineStyle: { color: '#94a3b8' } },
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            formatter: function(params) {
+                                let html = `<div class="font-bold border-b pb-1 mb-1">${params[0].name}</div>`;
+                                params.forEach(p => {
+                                    if(p.seriesName && p.seriesName !== '最高水位线' && p.seriesName !== '安全库存线') {
+                                        let val = Math.round(p.value).toLocaleString();
+                                        html += `<div class="flex justify-between items-center space-x-4">
+                                                    <span class="text-xs text-slate-500">${p.marker} ${p.seriesName}</span>
+                                                    <span class="font-bold ${p.value < 0 ? 'text-red-500' : 'text-slate-800'}">${val}</span>
+                                                 </div>`;
+                                    }
+                                });
+                                return html;
+                            }
+                        },
+                        legend: { data: ['实盘库存 / 欠账', '前台日销量'], bottom: 0, textStyle: { fontWeight: 'bold' } },
+                        grid: { left: '3%', right: '4%', bottom: '10%', top: '5%', containLabel: true },
+                        dataZoom: [{ type: 'inside', start: 0, end: 100 }, { type: 'slider', start: 0, end: 100, height: 20, bottom: 30 }],
+                        xAxis: { type: 'category', data: simData.xAxisDates, axisLabel: { formatter: val => val.substring(5) } },
+                        yAxis: [
+                            { type: 'value', name: '库存/欠账', splitLine: { lineStyle: { type: 'dashed', color: '#f1f5f9' } } },
+                            { type: 'value', name: '日销量', position: 'right', min: 0 }
+                        ],
                         series: [
-                            { name: '实盘库存/预售欠款', type: 'line', step: 'end', itemStyle: { color: '#0f172a' }, data: d.localStockSeries, markPoint: { data: d.markPoints }, markArea: { data: d.markAreas } },
-                            { name: '前台纯销量', type: 'line', yAxisIndex: 1, symbol: 'none', itemStyle: { color: '#f59e0b' }, data: d.actualSalesSeries },
-                            { name: '安全警戒线', type: 'line', symbol: 'none', itemStyle: { color: '#10b981', type: 'dashed' }, data: d.dynamicSafetySeries },
-                            { name: '防溢出水位线', type: 'line', symbol: 'none', itemStyle: { color: '#818cf8', type: 'dotted' }, data: d.dynamicMaxCapSeries }
+                            {
+                                name: '实盘库存 / 欠账',
+                                type: 'line',
+                                step: 'end',
+                                yAxisIndex: 0,
+                                itemStyle: { color: '#0f172a', width: 2.5 },
+                                areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(15, 23, 42, 0.15)' }, { offset: 1, color: 'rgba(15, 23, 42, 0.01)' }]) },
+                                data: simData.localStockSeries,
+                                markPoint: { data: simData.markPoints },
+                                markArea: { data: simData.markAreas },
+                                markLine: {
+                                    silent: true, symbol: 'none',
+                                    data: [{ yAxis: 0, lineStyle: { color: '#ef4444', type: 'solid', width: 1.5 } }]
+                                }
+                            },
+                            {
+                                name: '前台日销量',
+                                type: 'line',
+                                yAxisIndex: 1,
+                                smooth: false,
+                                symbol: 'none',
+                                itemStyle: { color: '#f59e0b', width: 2 },
+                                data: simData.actualSalesSeries
+                            },
+                            {
+                                name: '安全库存线',
+                                type: 'line',
+                                yAxisIndex: 0,
+                                symbol: 'none',
+                                itemStyle: { color: '#10b981', type: 'dashed', width: 1.5 },
+                                data: simData.dynamicSafetySeries
+                            },
+                            {
+                                name: '最高水位线',
+                                type: 'line',
+                                yAxisIndex: 0,
+                                symbol: 'none',
+                                itemStyle: { color: '#818cf8', type: 'dotted', width: 1.5 },
+                                data: simData.dynamicMaxCapSeries
+                            }
                         ]
                     };
                     this.chartInstance.setOption(option);
                 }
-            },
-            mounted() { this.initChart(); this.updateChart(); },
-            watch: {
-                currentProduct: { deep: true, handler() { this.updateChart(); } },
-                globalStartDate() { this.updateChart(); }
             }
         });
     </script>
 </body>
 </html>
+"""
+
+with open("strict_logic_simulator.html", "w", encoding="utf-8") as f:
+    f.write(html_content)
+
+display(HTML("<b>✅ 严格逻辑测试版 (大促已移除) 生成：<a href='strict_logic_simulator.html' target='_blank'>strict_logic_simulator.html</a></b>"))
+}
